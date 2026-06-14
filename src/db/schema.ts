@@ -12,3 +12,11 @@ export const messages = pgTable(
   },
   (table) => [index('messages_created_at_idx').on(table.createdAt)],
 );
+
+// Per-user profile picture, keyed by the Neon Auth user id. Rendered next to that
+// user's messages (looked up client-side by user id).
+export const profiles = pgTable('profiles', {
+  userId: text('user_id').primaryKey(),
+  avatarUrl: text('avatar_url').notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});

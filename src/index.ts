@@ -10,7 +10,7 @@ import { eq, desc } from 'drizzle-orm';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { parseEnv } from '@neondatabase/env/v1';
 import config from '../neon';
-import { messages } from './db/schema';
+import { messages, profiles } from './db/schema';
 import { putImage, presignImage } from './lib/storage';
 import { moderateMessage } from './lib/moderation';
 import { mentionsNeon, runAssistant } from './lib/assistant';
@@ -130,6 +130,34 @@ app.post('/upload', async (c) => {
   const key = `${identity.id}/${randomUUID()}.${ext}`;
   await putImage(key, body, contentType);
   const url = await presignImage(key);
+  return c.json({ url });
+});
+
+// Profile picture upload: same JWT-gated pattern, but stored under a stable key
+// per user (so re-uploads overwrite) and persisted to the `profiles` table. We
+// broadcast a `profile` event so every connected client updates that user's
+// avatar live, next to all of their messages.
+app.use('/avatar', cors({ origin: (o) => o ?? '*', allowMethods: ['POST', 'OPTIONS'], allowHeaders: ['authorization', 'content-type'] }));
+app.post('/avatar', async (c) => {
+  const identity = await verifyToken(c.req.header('authorization')?.replace(/^Bearer\s+/i, ''));
+  if (!identity) return c.json({ error: 'Unauthorized' }, 401);
+
+  const contentType = c.req.header('content-type') ?? '';
+  const ext = EXT[contentType];
+  if (!ext) return c.json({ error: 'Unsupported image type' }, 415);
+
+  const body = Buffer.from(await c.req.arrayBuffer());
+  if (body.byteLength === 0) return c.json({ error: 'Empty body' }, 400);
+  if (body.byteLength > MAX_IMAGE_BYTES) return c.json({ error: 'Image too large' }, 413);
+
+  const key = `avatars/${identity.id}.${ext}`;
+  await putImage(key, body, contentType);
+  const url = await presignImage(key);
+  await db
+    .insert(profiles)
+    .values({ userId: identity.id, avatarUrl: url })
+    .onConflictDoUpdate({ target: profiles.userId, set: { avatarUrl: url, updatedAt: new Date() } });
+  await notify({ type: 'profile', userId: identity.id, avatarUrl: url });
   return c.json({ url });
 });
 
