@@ -14,8 +14,25 @@ export default async function AuthPage({
 }) {
   const { path } = await params;
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <AuthView path={path} />
+    <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-8 p-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://neon.com/brand/neon-logo-dark-color.svg"
+          alt="Neon"
+          className="h-8"
+        />
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Chat with Neon</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Realtime chat on Neon — with an{" "}
+            <span className="text-neon font-medium">@neon</span> AI assistant.
+          </p>
+        </div>
+      </div>
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-card/50 p-1 shadow-2xl backdrop-blur-xl">
+        <AuthView path={path} />
+      </div>
     </main>
   );
 }

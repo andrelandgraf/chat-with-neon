@@ -168,43 +168,89 @@ export function Chat({ userName }: { userName: string }) {
 
   return (
     <>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="scroll-slim flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 && (
-          <p className="text-muted-foreground text-sm">No messages yet. Say hi!</p>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className="text-sm">
-            <span className={m.userName === userName ? "font-semibold" : "font-medium"}>
-              {m.userName}
-            </span>
-            {m.body && <span> {m.body}</span>}
-            {m.imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={m.imageUrl}
-                alt=""
-                className="mt-1 max-h-60 rounded-md border"
-              />
-            )}
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://neon.com/brand/neon-logomark-dark-color.svg"
+              alt=""
+              className="size-10 opacity-80"
+            />
+            <p className="text-muted-foreground text-sm">
+              No messages yet. Say hi — or tag{" "}
+              <span className="text-neon font-medium">@neon</span> for help.
+            </p>
           </div>
-        ))}
+        )}
+        {messages.map((m) => {
+          const own = m.userName === userName;
+          const assistant = m.userName === "Neon";
+          return (
+            <div
+              key={m.id}
+              className={`flex items-end gap-2.5 ${own ? "flex-row-reverse" : ""}`}
+            >
+              {!own && <Avatar name={m.userName} assistant={assistant} />}
+              <div className={`flex max-w-[78%] flex-col gap-1 ${own ? "items-end" : "items-start"}`}>
+                {!own && (
+                  <div className="flex items-center gap-1.5 px-1 text-xs">
+                    <span className={assistant ? "text-neon font-semibold" : "text-foreground/90 font-medium"}>
+                      {m.userName}
+                    </span>
+                    {assistant && (
+                      <span className="bg-neon/15 text-neon rounded px-1 py-px text-[10px] font-medium tracking-wide uppercase">
+                        AI
+                      </span>
+                    )}
+                    <span className="text-muted-foreground/70">{fmtTime(m.createdAt)}</span>
+                  </div>
+                )}
+                <div
+                  className={`rounded-2xl border px-3.5 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
+                    own
+                      ? "border-neon/30 bg-neon/15 rounded-br-sm text-foreground"
+                      : assistant
+                        ? "border-neon/25 bg-neon-dim rounded-bl-sm text-foreground"
+                        : "rounded-bl-sm border-white/5 bg-secondary/70 text-foreground"
+                  }`}
+                >
+                  {m.body && <span>{m.body}</span>}
+                  {m.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.imageUrl}
+                      alt=""
+                      className={`max-h-64 rounded-lg border border-white/10 ${m.body ? "mt-2" : ""}`}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 
       {pendingImage && (
-        <div className="flex items-center gap-2 border-t px-3 pt-2 text-xs">
+        <div className="flex items-center gap-2 border-t border-white/10 px-4 pt-3 text-xs">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={pendingImage} alt="" className="h-10 w-10 rounded object-cover" />
+          <img src={pendingImage} alt="" className="h-10 w-10 rounded-md object-cover ring-1 ring-white/10" />
           <span className="text-muted-foreground">Image attached</span>
-          <button type="button" onClick={() => setPendingImage(null)} aria-label="Remove image">
+          <button
+            type="button"
+            onClick={() => setPendingImage(null)}
+            aria-label="Remove image"
+            className="text-muted-foreground hover:text-foreground ml-auto"
+          >
             <X className="size-4" />
           </button>
         </div>
       )}
 
-      <form onSubmit={send} className="relative flex gap-2 border-t p-3">
+      <form onSubmit={send} className="relative flex items-center gap-2 border-t border-white/10 p-3">
         {suggestions.length > 0 && (
-          <div className="bg-popover absolute bottom-full left-3 mb-1 w-60 overflow-hidden rounded-md border shadow-md">
+          <div className="bg-popover/95 absolute bottom-full left-3 mb-2 w-64 overflow-hidden rounded-xl border border-white/10 shadow-xl backdrop-blur">
             {suggestions.map((s) => (
               <button
                 key={s.name}
@@ -213,9 +259,15 @@ export function Chat({ userName }: { userName: string }) {
                   e.preventDefault();
                   selectMention(s.name);
                 }}
-                className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+                className="hover:bg-neon/10 flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm"
               >
-                <span className="font-medium">@{s.name}</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="https://neon.com/brand/neon-logomark-dark-color.svg"
+                  alt=""
+                  className="size-5"
+                />
+                <span className="text-neon font-medium">@{s.name}</span>
                 <span className="text-muted-foreground text-xs">{s.desc}</span>
               </button>
             ))}
@@ -232,6 +284,7 @@ export function Chat({ userName }: { userName: string }) {
           type="button"
           variant="outline"
           size="icon"
+          className="rounded-full"
           disabled={uploading}
           onClick={() => fileRef.current?.click()}
           aria-label="Attach image"
@@ -240,15 +293,41 @@ export function Chat({ userName }: { userName: string }) {
         </Button>
         <Input
           ref={inputRef}
+          className="rounded-full"
           placeholder={connected ? "Message everyone… (try @neon)" : "Connecting…"}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
         />
-        <Button type="submit" disabled={!connected}>
+        <Button type="submit" className="rounded-full px-5 font-semibold" disabled={!connected}>
           Send
         </Button>
       </form>
     </>
   );
+}
+
+function Avatar({ name, assistant }: { name: string; assistant: boolean }) {
+  if (assistant) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src="https://neon.com/brand/neon-logomark-dark-color.svg"
+        alt="Neon"
+        className="ring-neon/40 size-8 shrink-0 rounded-full bg-black/40 p-1 ring-1"
+      />
+    );
+  }
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div className="bg-secondary text-foreground grid size-8 shrink-0 place-items-center rounded-full text-xs font-semibold ring-1 ring-white/10">
+      {initial}
+    </div>
+  );
+}
+
+function fmtTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
