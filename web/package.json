@@ -1,5 +1,5 @@
 {
-  "name": "with-realtime-chat-web",
+  "name": "chat-with-neon-web",
   "private": true,
   "scripts": {
     "dev": "next dev",

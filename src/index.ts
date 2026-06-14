@@ -6,13 +6,14 @@ import { cors } from 'hono/cors';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, Client } from 'pg';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { parseEnv } from '@neondatabase/env/v1';
 import config from '../neon';
 import { messages } from './db/schema';
 import { putImage, presignImage } from './lib/storage';
 import { moderateMessage } from './lib/moderation';
+import { mentionsNeon, runAssistant } from './lib/assistant';
 
 const env = parseEnv(config);
 
@@ -77,6 +78,27 @@ async function moderateAndMaybeDelete(id: number, body: string): Promise<void> {
   }
 }
 
+// When a message tags @neon, the assistant reads the recent transcript and posts
+// its own reply back into the chat (broadcast like any other message).
+async function handleNeonMention(): Promise<void> {
+  try {
+    const recent = await db
+      .select({ userName: messages.userName, body: messages.body, imageUrl: messages.imageUrl })
+      .from(messages)
+      .orderBy(desc(messages.createdAt))
+      .limit(20);
+    const reply = await runAssistant(recent.reverse());
+    if (!reply) return;
+    const [row] = await db
+      .insert(messages)
+      .values({ userId: 'neon-assistant', userName: 'Neon', body: reply })
+      .returning();
+    await notify({ type: 'message', message: row });
+  } catch (error) {
+    console.error('[assistant] failed:', error);
+  }
+}
+
 const EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -87,7 +109,7 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const app = new Hono();
 
-app.get('/', (c) => c.text('Neon realtime chat — connect over WebSocket with ?token=<jwt>'));
+app.get('/', (c) => c.text('Chat with Neon — connect over WebSocket with ?token=<jwt>'));
 
 // Image upload is a normal authenticated HTTP request (you can't stream a file
 // over the chat WebSocket): the client uploads here, gets a URL back, then sends
@@ -153,6 +175,8 @@ export default {
         await notify({ type: 'message', message: row });
         // …then moderate the text and retroactively delete if it's flagged.
         if (body) void moderateAndMaybeDelete(row.id, body);
+        // If the message tags @neon, the assistant replies.
+        if (body && mentionsNeon(body)) void handleNeonMention();
       });
     });
   },

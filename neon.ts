@@ -12,7 +12,7 @@ export default defineConfig({
     },
     functions: {
       chat: {
-        name: "realtime chat",
+        name: "chat with neon",
         source: "src/index.ts",
         // Mastra Cloud (Studio) observability credentials, injected at deploy
         // time from .env.deploy (`neonctl deploy --env .env.deploy`). Unset

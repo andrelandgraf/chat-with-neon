@@ -9,6 +9,14 @@ const WS_URL = process.env.NEXT_PUBLIC_CHAT_WS_URL!;
 // The function speaks HTTP on the same host (image uploads) and WS (chat).
 const HTTP_URL = WS_URL.replace(/^wss:/, "https:").replace(/^ws:/, "http:");
 
+const MENTIONS = [{ name: "neon", desc: "Neon assistant" }];
+
+// The @-token currently being typed at the end of the input (null if none).
+function activeMentionQuery(text: string): string | null {
+  const m = text.match(/(?:^|\s)@(\w*)$/);
+  return m ? m[1].toLowerCase() : null;
+}
+
 type Message = {
   id: number;
   userName: string;
@@ -47,6 +55,7 @@ export function Chat({ userName }: { userName: string }) {
   const [uploading, setUploading] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   function addMessage(msg: Message) {
@@ -141,6 +150,22 @@ export function Chat({ userName }: { userName: string }) {
     setPendingImage(null);
   }
 
+  const mentionQuery = activeMentionQuery(draft);
+  const suggestions =
+    mentionQuery !== null ? MENTIONS.filter((m) => m.name.startsWith(mentionQuery)) : [];
+
+  function selectMention(name: string) {
+    setDraft((d) => d.replace(/@(\w*)$/, `@${name} `));
+    inputRef.current?.focus();
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (suggestions.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
+      e.preventDefault();
+      selectMention(suggestions[0].name);
+    }
+  }
+
   return (
     <>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -177,7 +202,25 @@ export function Chat({ userName }: { userName: string }) {
         </div>
       )}
 
-      <form onSubmit={send} className="flex gap-2 border-t p-3">
+      <form onSubmit={send} className="relative flex gap-2 border-t p-3">
+        {suggestions.length > 0 && (
+          <div className="bg-popover absolute bottom-full left-3 mb-1 w-60 overflow-hidden rounded-md border shadow-md">
+            {suggestions.map((s) => (
+              <button
+                key={s.name}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectMention(s.name);
+                }}
+                className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+              >
+                <span className="font-medium">@{s.name}</span>
+                <span className="text-muted-foreground text-xs">{s.desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <input
           ref={fileRef}
           type="file"
@@ -196,9 +239,11 @@ export function Chat({ userName }: { userName: string }) {
           <ImagePlus className="size-4" />
         </Button>
         <Input
-          placeholder={connected ? "Message everyone…" : "Connecting…"}
+          ref={inputRef}
+          placeholder={connected ? "Message everyone… (try @neon)" : "Connecting…"}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
         />
         <Button type="submit" disabled={!connected}>
           Send

@@ -4,15 +4,17 @@
   <img width="250px" alt="Neon Logo fallback" src="https://neon.com/brand/neon-logo-dark-color.svg">
 </picture>
 
-# Getting started with Neon realtime chat
+# Chat with Neon
 
-A minimal full-stack realtime chat: a [Next.js](https://nextjs.org) app with [Neon Auth](https://neon.com/docs/neon-auth/overview), talking over **WebSockets** to a [Hono](https://hono.dev) server running on [Neon Functions](https://neon.com/docs/compute/functions/overview), with messages stored in [Neon](https://neon.com) Postgres via [Drizzle ORM](https://orm.drizzle.team).
+A full-stack realtime chat: a [Next.js](https://nextjs.org) app with [Neon Auth](https://neon.com/docs/neon-auth/overview), talking over **WebSockets** to a [Hono](https://hono.dev) server running on [Neon Functions](https://neon.com/docs/compute/functions/overview), with messages stored in [Neon](https://neon.com) Postgres via [Drizzle ORM](https://orm.drizzle.team).
 
 There is one shared chat for all signed-in users:
 
 - The **Next.js app** (deployed on Vercel) handles sign in / sign up with Neon Auth and serves chat history from Postgres.
 - The browser opens a **WebSocket directly to the Neon Function**, authenticated with a Neon Auth JWT.
 - The function verifies the JWT, stores each message in Postgres, and fans it out to every connected client across isolates using Postgres `LISTEN`/`NOTIFY`.
+- A [Mastra](https://mastra.ai) **moderation agent** screens every message and retroactively deletes anything inappropriate, and you can attach **images** (Neon Object Storage).
+- Tag **`@neon`** (with autocomplete) to summon a friendly **Mastra assistant** that answers Neon questions using the Neon docs MCP server and the [`neondatabase/agent-skills`](https://github.com/neondatabase/agent-skills).
 
 ```
 Browser ──(history)──▶ Next.js /api/messages ──▶ Postgres
@@ -22,27 +24,29 @@ Browser ──(wss?token=JWT)──▶ Neon Function ──▶ Postgres + NOTIFY
 ## Project structure
 
 ```
-with-realtime-chat/
+chat-with-neon/
 ├── neon.ts                 # Neon policy: Neon Auth + the `chat` function
 ├── drizzle.config.ts       # Drizzle Kit config
 ├── .env.example            # Function environment variables
 ├── src/
 │   ├── index.ts            # Hono `fetch` + WebSocket `upgrade` (the function)
-│   └── db/
-│       └── schema.ts       # Drizzle schema (messages)
+│   ├── db/schema.ts        # Drizzle schema (messages)
+│   ├── skills/skills.json  # neondatabase/agent-skills, inlined for the assistant
+│   ├── mastra/             # Mastra instance + agents (moderator, assistant)
+│   └── lib/                # moderation, assistant (@neon), mcp, skills, storage
 └── web/                    # Next.js app (Neon Auth + chat UI), deploy on Vercel
     ├── .env.example        # Web environment variables
     └── src/
-        ├── app/            # login page, chat page, /api/auth, /api/messages
-        ├── components/     # chat + shadcn/ui
+        ├── app/            # auth pages, chat page, /api/auth, /api/messages
+        ├── components/     # chat (+ @neon autocomplete) + shadcn/ui
         └── lib/auth/       # Neon Auth client + server
 ```
 
 ## Clone the repository
 
 ```bash
-npx degit neondatabase/examples/with-realtime-chat ./with-realtime-chat
-cd with-realtime-chat
+git clone https://github.com/andrelandgraf/chat-with-neon.git
+cd chat-with-neon
 ```
 
 ## Install and authenticate the CLIs
@@ -185,4 +189,5 @@ neon neon-auth domain add https://<your-app>.vercel.app
 - **Reconnect.** The client reconnects with exponential backoff (re-minting a token each attempt), since serverless isolates can be evicted when idle.
 - **Moderation gate (Mastra agent).** Every message is broadcast instantly, then a Mastra agent — running inside the function, using the Neon AI Gateway — classifies it. If it's inappropriate (sexual, harassment, hate, threats) the message is deleted and a `delete` event is broadcast, so it disappears for everyone (retroactive moderation). The agent is only ever triggered by authenticated WebSocket messages — there's no public endpoint to invoke it. Agent runs are traced to **Mastra Cloud (Studio)** for observability.
 - **Image uploads (Neon Object Storage).** You can't stream a file over the chat WebSocket, so images are uploaded over HTTP to the function's JWT-gated `/upload` route, stored in Neon Object Storage, and a presigned URL is returned; the chat message then carries that URL over the WebSocket. The history endpoint requires a valid Neon Auth session.
+- **`@neon` assistant (Mastra agent).** Tagging `@neon` (the composer autocompletes it) triggers a second Mastra agent — also inside the function — that reads the last 20 messages (including any image links) and replies in chat as **Neon**. It's a fun, friendly helper grounded in Neon: it has the [Neon docs MCP server](https://mcp.neon.tech/mcp?category=docs) tools to search the docs, plus all of [`neondatabase/agent-skills`](https://github.com/neondatabase/agent-skills) loaded on demand (their frontmatter is always in the prompt; a `load_skill` tool fetches the full skill). It only ever fires on `@neon`-tagged messages and is traced to Mastra Cloud.
 - **One way to reach Postgres.** Both the function and the Next.js app use Drizzle + `node-postgres` against the pooled `DATABASE_URL`. In the web app the pool is created once at module scope and registered with `attachDatabasePool` (`@vercel/functions`) so Vercel Fluid Compute drains idle connections before suspending the instance — reusing connections without leaking them.

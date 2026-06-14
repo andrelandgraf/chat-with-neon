@@ -1,6 +1,7 @@
 import { Mastra } from '@mastra/core/mastra';
 import { Observability, MastraPlatformExporter } from '@mastra/observability';
 import { moderator } from './agents/moderator';
+import { assistant } from './agents/assistant';
 
 // Ship agent traces to Mastra Cloud (Studio). Only wire observability once both
 // creds are present (Observability requires >=1 exporter), so the app runs fine
@@ -21,6 +22,6 @@ const observability = platformReady
   : undefined;
 
 export const mastra = new Mastra({
-  agents: { moderator },
+  agents: { moderator, assistant },
   ...(observability ? { observability } : {}),
 });
