@@ -79,8 +79,11 @@ async function moderateAndMaybeDelete(id: number, body: string): Promise<void> {
 }
 
 // When a message tags @neon, the assistant reads the recent transcript and posts
-// its own reply back into the chat (broadcast like any other message).
+// its own reply back into the chat (broadcast like any other message). We emit a
+// `typing` event up front so clients can show a "Neon is replying…" bubble, and
+// clear it when done (the real message replaces it).
 async function handleNeonMention(): Promise<void> {
+  await notify({ type: 'typing', active: true }).catch(() => {});
   try {
     const recent = await db
       .select({ userName: messages.userName, body: messages.body, imageUrl: messages.imageUrl })
@@ -88,14 +91,17 @@ async function handleNeonMention(): Promise<void> {
       .orderBy(desc(messages.createdAt))
       .limit(20);
     const reply = await runAssistant(recent.reverse());
-    if (!reply) return;
-    const [row] = await db
-      .insert(messages)
-      .values({ userId: 'neon-assistant', userName: 'Neon', body: reply })
-      .returning();
-    await notify({ type: 'message', message: row });
+    if (reply) {
+      const [row] = await db
+        .insert(messages)
+        .values({ userId: 'neon-assistant', userName: 'Neon', body: reply })
+        .returning();
+      await notify({ type: 'message', message: row });
+    }
   } catch (error) {
     console.error('[assistant] failed:', error);
+  } finally {
+    await notify({ type: 'typing', active: false }).catch(() => {});
   }
 }
 

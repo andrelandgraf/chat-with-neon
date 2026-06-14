@@ -53,6 +53,7 @@ async function getToken(): Promise<string> {
 export function Chat({ userId, userName }: { userId: string; userName: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
+  const [assistantTyping, setAssistantTyping] = useState(false);
   const [draft, setDraft] = useState("");
   const [connected, setConnected] = useState(false);
   const [pendingImage, setPendingImage] = useState<string | null>(null);
@@ -112,12 +113,18 @@ export function Chat({ userId, userName }: { userId: string; userName: string })
           id?: number;
           userId?: string;
           avatarUrl?: string;
+          active?: boolean;
         };
-        if (data.type === "message" && data.message) addMessage(normalize(data.message));
-        else if (data.type === "delete" && typeof data.id === "number")
+        if (data.type === "message" && data.message) {
+          const msg = normalize(data.message);
+          // The real reply replaces the "replying…" bubble.
+          if (msg.userId === "neon-assistant") setAssistantTyping(false);
+          addMessage(msg);
+        } else if (data.type === "delete" && typeof data.id === "number")
           setMessages((prev) => prev.filter((m) => m.id !== data.id));
         else if (data.type === "profile" && data.userId && data.avatarUrl)
           setAvatars((prev) => ({ ...prev, [data.userId!]: data.avatarUrl! }));
+        else if (data.type === "typing") setAssistantTyping(Boolean(data.active));
       };
       ws.onclose = () => {
         setConnected(false);
@@ -136,7 +143,7 @@ export function Chat({ userId, userName }: { userId: string; userName: string })
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, assistantTyping]);
 
   async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -313,6 +320,25 @@ export function Chat({ userId, userName }: { userId: string; userName: string })
             </div>
           );
         })}
+        {assistantTyping && (
+          <div className="flex items-end gap-2.5">
+            <Avatar userId="neon-assistant" name="Neon" assistant avatars={avatars} />
+            <div className="flex max-w-[78%] flex-col items-start gap-1">
+              <div className="flex items-center gap-1.5 px-1 text-xs">
+                <span className="text-neon font-semibold">Neon</span>
+                <span className="bg-neon/15 text-neon rounded px-1 py-px text-[10px] font-medium tracking-wide uppercase">
+                  AI
+                </span>
+                <span className="text-muted-foreground/70">replying…</span>
+              </div>
+              <div className="border-neon/25 bg-neon-dim flex items-center gap-1 rounded-2xl rounded-bl-sm border px-4 py-3">
+                <span className="bg-neon/70 size-1.5 animate-bounce rounded-full [animation-delay:-200ms]" />
+                <span className="bg-neon/70 size-1.5 animate-bounce rounded-full [animation-delay:-100ms]" />
+                <span className="bg-neon/70 size-1.5 animate-bounce rounded-full" />
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
