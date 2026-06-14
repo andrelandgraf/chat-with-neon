@@ -58,8 +58,9 @@ export function Chat({ userName }: { userName: string }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  // Keep only the last 100 messages in view.
   function addMessage(msg: Message) {
-    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg].slice(-100)));
   }
 
   // Load history from the Next.js backend.
@@ -67,7 +68,7 @@ export function Chat({ userName }: { userName: string }) {
     fetch("/api/messages")
       .then((r) => r.json())
       .then((d: { messages?: Record<string, unknown>[] }) =>
-        setMessages((d.messages ?? []).map(normalize)),
+        setMessages((d.messages ?? []).map(normalize).slice(-100)),
       )
       .catch(() => {});
   }, []);

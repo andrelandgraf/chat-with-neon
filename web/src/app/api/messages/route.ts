@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messages } from "@/db/schema";
 import { auth } from "@/lib/auth/server";
@@ -12,10 +12,11 @@ export async function GET() {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Only ever return the last 100 messages (newest 100, in chronological order).
   const rows = await db
     .select()
     .from(messages)
-    .orderBy(asc(messages.createdAt))
-    .limit(200);
-  return Response.json({ messages: rows });
+    .orderBy(desc(messages.createdAt))
+    .limit(100);
+  return Response.json({ messages: rows.reverse() });
 }
