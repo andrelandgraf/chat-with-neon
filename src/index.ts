@@ -1,9 +1,7 @@
-import type { IncomingMessage } from 'node:http';
-import type { Duplex } from 'node:stream';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { WebSocketServer, type WebSocket } from 'ws';
+import { upgradeWebSocket } from '@neon/functions';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, Client } from 'pg';
 import { eq, desc } from 'drizzle-orm';
@@ -56,8 +54,8 @@ listener
   .catch((error) => console.error('[listen] failed:', error));
 listener.on('notification', (msg) => {
   if (!msg.payload) return;
-  for (const ws of clients) {
-    if (ws.readyState === ws.OPEN) ws.send(msg.payload);
+  for (const socket of clients) {
+    if (socket.readyState === socket.OPEN) socket.send(msg.payload);
   }
 });
 
@@ -167,52 +165,57 @@ app.post('/avatar', async (c) => {
   return c.json({ url });
 });
 
-const wss = new WebSocketServer({ noServer: true });
+
+async function ingest(identity: Identity, raw: string): Promise<void> {
+  // The client sends JSON: { body, imageUrl? }. Fall back to plain text.
+  let body = '';
+  let imageUrl: string | null = null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      const p = parsed as { body?: unknown; imageUrl?: unknown };
+      if (typeof p.body === 'string') body = p.body.slice(0, 2000).trim();
+      if (typeof p.imageUrl === 'string') imageUrl = p.imageUrl;
+    }
+  } catch {
+    body = raw.slice(0, 2000).trim();
+  }
+  if (!body && !imageUrl) return;
+
+  const [row] = await db
+    .insert(messages)
+    .values({ userId: identity.id, userName: identity.name, body, imageUrl })
+    .returning();
+  // Broadcast immediately so the message shows up in realtime…
+  await notify({ type: 'message', message: row });
+  // …then moderate the text and retroactively delete if it's flagged.
+  if (body) void moderateAndMaybeDelete(row.id, body);
+  // If the message tags @neon, the assistant replies.
+  if (body && mentionsNeon(body)) void handleNeonMention();
+}
 
 export default {
-  fetch: (request: Request) => app.fetch(request),
-
-  async upgrade(req: IncomingMessage, socket: Duplex, head: Buffer) {
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    const identity = await verifyToken(url.searchParams.get('token'));
-    if (!identity) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
+  async fetch(request: Request): Promise<Response> {
+    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
+      return app.fetch(request);
     }
 
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      clients.add(ws);
-      ws.on('close', () => clients.delete(ws));
-      ws.on('message', async (data) => {
-        // The client sends JSON: { body, imageUrl? }. Fall back to plain text.
-        let body = '';
-        let imageUrl: string | null = null;
-        const raw = data.toString();
-        try {
-          const parsed: unknown = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object') {
-            const p = parsed as { body?: unknown; imageUrl?: unknown };
-            if (typeof p.body === 'string') body = p.body.slice(0, 2000).trim();
-            if (typeof p.imageUrl === 'string') imageUrl = p.imageUrl;
-          }
-        } catch {
-          body = raw.slice(0, 2000).trim();
-        }
-        if (!body && !imageUrl) return;
+    const url = new URL(request.url);
+    const identity = await verifyToken(url.searchParams.get('token'));
+    if (!identity) return new Response('unauthorized', { status: 401 });
 
-        const [row] = await db
-          .insert(messages)
-          .values({ userId: identity.id, userName: identity.name, body, imageUrl })
-          .returning();
-        // Broadcast immediately so the message shows up in realtime…
-        await notify({ type: 'message', message: row });
-        // …then moderate the text and retroactively delete if it's flagged.
-        if (body) void moderateAndMaybeDelete(row.id, body);
-        // If the message tags @neon, the assistant replies.
-        if (body && mentionsNeon(body)) void handleNeonMention();
-      });
+    const { socket, response } = upgradeWebSocket(request);
+
+    clients.add(socket);
+    socket.addEventListener('close', () => clients.delete(socket));
+    socket.addEventListener('message', (event) => {
+      if (typeof event.data !== 'string') return;
+      void ingest(identity, event.data).catch((error) =>
+        console.error('[ingest] failed:', error),
+      );
     });
+
+    return response;
   },
 };
 
