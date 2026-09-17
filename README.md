@@ -54,7 +54,7 @@ cd chat-with-neon
 The Neon CLI provisions and deploys the function; the [Vercel CLI](https://vercel.com/docs/cli) is the recommended way to deploy and configure the Next.js app.
 
 ```bash
-npm i -g neonctl vercel
+npm i -g neon vercel
 neon login
 vercel login
 ```
@@ -81,7 +81,7 @@ If you let your agent drive this, add `--agent` to skip interactive mode.
 `neon.ts` declares Neon Auth and the `chat` function. Apply the policy so they exist on your branch:
 
 ```bash
-neonctl config apply
+neon config apply
 ```
 
 ## Configure your environment
@@ -89,7 +89,7 @@ neonctl config apply
 Pull your branch-scoped variables into `.env.local`:
 
 ```bash
-neonctl env pull
+neon env pull
 ```
 
 You should see `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL`, and `NEON_AUTH_JWKS_URL`.
@@ -105,7 +105,7 @@ npm run db:push
 Start the function (serves on `http://localhost:8787`):
 
 ```bash
-neonctl dev
+neon dev
 ```
 
 Allow `localhost` as a Neon Auth redirect domain so sign-in works in dev:
@@ -134,13 +134,13 @@ Open `http://localhost:3000`, sign up, and open a second browser to watch messag
 ## Deploy the function to Neon
 
 ```bash
-neonctl deploy
+neon deploy
 ```
 
 Grab the function's invocation URL — this is your `wss://` endpoint:
 
 ```bash
-neonctl functions get chat
+neon functions get chat
 # invocation_url: https://<branch>-chat.compute.<region>.aws.neon.tech
 ```
 

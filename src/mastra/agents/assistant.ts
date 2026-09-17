@@ -1,10 +1,5 @@
 import { Agent } from '@mastra/core/agent';
-import { parseEnv } from '@neondatabase/env/v1';
-import config from '../../../neon';
 import { loadSkillTool, SKILL_INDEX, ALWAYS_LOADED_SKILL_BODY } from '../../lib/skills';
-
-const env = parseEnv(config);
-const gatewayUrl = env.aiGateway.baseUrl.replace('/openai/v1', '/mlflow/v1');
 
 const INSTRUCTIONS = [
   'You are Neon — a fun, friendly, and polite assistant who hangs out in a group chat.',
@@ -32,6 +27,6 @@ export const assistant = new Agent({
   id: 'assistant',
   name: 'assistant',
   instructions: INSTRUCTIONS,
-  model: { id: 'neon/gpt-5-mini', url: gatewayUrl, apiKey: env.aiGateway.apiKey },
+  model: 'neon/gpt-5-mini',
   tools: { load_skill: loadSkillTool },
 });

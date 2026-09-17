@@ -8,7 +8,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, Client } from 'pg';
 import { eq, desc } from 'drizzle-orm';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { parseEnv } from '@neondatabase/env/v1';
+import { parseEnv } from '@neon/env';
 import config from '../neon';
 import { messages, profiles } from './db/schema';
 import { putImage, presignImage } from './lib/storage';
