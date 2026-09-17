@@ -15,7 +15,20 @@ import { putImage, presignImage } from './lib/storage';
 import { moderateMessage } from './lib/moderation';
 import { mentionsNeon, runAssistant } from './lib/assistant';
 
-const env = parseEnv(config);
+// Inside the Function the runtime does not inject NEON_FUNCTION_CHAT_BASE_URL
+// (that key is for callers). Full parseEnv(config) would require it and fail load.
+const env = parseEnv(config, [
+  'DATABASE_URL',
+  'DATABASE_URL_UNPOOLED',
+  'NEON_AUTH_BASE_URL',
+  'NEON_AUTH_JWKS_URL',
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'AWS_ENDPOINT_URL_S3',
+  'AWS_REGION',
+  'NEON_AI_GATEWAY_TOKEN',
+  'NEON_AI_GATEWAY_BASE_URL',
+]);
 
 const pool = new Pool({ connectionString: env.postgres.databaseUrl, max: 5 });
 const db = drizzle(pool);
